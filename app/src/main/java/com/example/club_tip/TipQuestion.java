@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -43,7 +44,9 @@ public class TipQuestion extends AppCompatActivity {
 
     public static final MediaType JSON
             = MediaType.get("application/json; charset=utf-8");
-    OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient();
+
+
 
 
 
@@ -52,6 +55,13 @@ public class TipQuestion extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_tip_question);
+
+        //연결시간 설정. 60초/120초/60초
+        client = new OkHttpClient().newBuilder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(120, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build();
 
 
         recyclerView = findViewById(R.id.tip_rv1);
@@ -110,6 +120,7 @@ public class TipQuestion extends AppCompatActivity {
 
 
 
+
     void addResponse(String response) {
         messageList.remove(messageList.size()-1);
         addToChat(response, Message.SENT_BY_BOT);
@@ -119,45 +130,50 @@ public class TipQuestion extends AppCompatActivity {
 
 
 
+    // 답변을 기다리는 동안 "Typing.."으로 표시되도록 설정
     void callAPI(String question) {
         messageList.add(new Message("Typing...", Message.SENT_BY_BOT));
         JSONObject jsonObject = new JSONObject();
 
+        //추가된 내용
+        JSONArray arr = new JSONArray();
+        JSONObject baseAi = new JSONObject();
+        JSONObject userMsg = new JSONObject();
         try {
-            jsonObject.put("model", "gpt-3.5-turbo");
-            JSONArray messageArr = new JSONArray();
-            JSONObject obj = new JSONObject();
-            obj.put("role", "user");
-            obj.put("content", question);
-            messageArr.put(obj);
-
-            jsonObject.put("messages", messageArr);
-
+            //AI 속성설정
+            baseAi.put("role", "user");
+            baseAi.put("content", "You are a helpful and kind AI Assistant.");
+            //유저 메세지
+            userMsg.put("role", "user");
+            userMsg.put("content", question);
+            //array로 담아서 한번에 보낸다
+            arr.put(baseAi);
+            arr.put(userMsg);
         } catch (JSONException e) {
             throw new RuntimeException(e);
         }
 
+        JSONObject object = new JSONObject();
+        try {
+            //모델명 변경
+            object.put("model", "gpt-3.5-turbo");
+            object.put("messages", arr);
+//            아래 put 내용은 삭제하면 된다
+//            object.put("model", "text-davinci-003");
+//            object.put("prompt", question);
+//            object.put("max_tokens", 4000);
+//            object.put("temperature", 0);
 
-
-        // JSON 데이터
-        String JSON = "{\n" +
-                "  \"model_id\": \"ibm/mpt-7b-instruct\",\n" +
-                "  \"inputs\": [\n" +
-                "    \"\"\n" +
-                "  ],\n" +
-                "  \"parameters\": {\n" +
-                "    \"decoding_method\": \"greedy\",\n" +
-                "    \"min_new_tokens\": 1,\n" +
-                "    \"max_new_tokens\": 200\n" +
-                "  }\n" +
-                "}";
+        } catch (JSONException e){
+            e.printStackTrace();
+        }
 
 
         // okhttp 요청 생성
-        RequestBody body = RequestBody.create(jsonObject.toString(), JSON);
+        RequestBody body = RequestBody.create (object.toString(), JSON);
         Request request = new Request.Builder()
-                .url("https://workbench-api.res.ibm.com/v1/generate")
-                .header("Authorization", " Bearer pak-Yhyf1YwmFkyArKEn5LwZh8bXqIGWwG3UEhoZX3jhMU4")
+                .url("https://api.openai.com/v1/chat/completions")
+                .header("Authorization", " Bearer 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")
                 .post(body)
                 .build();
 
@@ -174,9 +190,9 @@ public class TipQuestion extends AppCompatActivity {
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
 
                 if(response.isSuccessful()) {
+                    JSONArray jsonArray = null;
                     try {
                         JSONObject jsonObject= new JSONObject(response.body().string());
-                        JSONArray jsonArray = null;
                         jsonArray = jsonObject.getJSONArray("choices");
 
                         String result = jsonArray.getJSONObject(0)
